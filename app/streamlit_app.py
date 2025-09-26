@@ -1,9 +1,9 @@
 import streamlit as st
-from app import load_documents, split_documents, create_vectorstore, build_rag_chain, format_retrieved_docs, format_chat_history
+from app import load_documents, split_documents, create_vectorstore, build_rag_chain, format_retrieved_docs, format_chat_history, build_mcq_chain
 import os
 
 st.set_page_config(page_title="SPPU Exam Assistant — Chat RAG", layout="wide")
-st.title("📘 SPPU Exam Assistant — Chat + Memory + Sources")
+st.title("📘 SPPU Exam Assistant")
 
 # session state init
 if "history" not in st.session_state:
@@ -17,7 +17,7 @@ if "chunks_loaded" not in st.session_state:
 temp_dir = "temp_pdfs"
 os.makedirs(temp_dir, exist_ok=True)
 
-uploaded_file = st.file_uploader("Upload one or more PDF files", type="pdf", accept_multiple_files=False)
+uploaded_file = st.file_uploader("Upload one or more PDF Textbooks", type="pdf", accept_multiple_files=False)
 
 if uploaded_file is not None:
     # save file
@@ -108,3 +108,35 @@ with side_col:
     st.write("Tips:")
     st.write("- Ask follow-up questions — history is preserved during this session.")
     st.write("- If the assistant says \"I don't know\", try rephrasing the question or upload more material.")
+
+st.sidebar.title("Exam Assistent")
+
+if uploaded_file:
+    st.sidebar.subheader("Uploaded File")
+    st.sidebar.write(f"📘{uploaded_file.name}")
+    
+if "source" in st.session_state:
+    st.sidebar.subheader("Sources")
+    for src in st.session_state["sources"]:
+        st.sidebar.write(f"📄 Page {src.metadata.get('page', '?')} – {src.metadata.get('source', '')}")
+    
+    
+st.subheader("Generate Practice MCQ's")
+    
+mcq_topic = st.text_input("Enter topic for MCQs (Topic should be from the uploaded PDF):")
+num_mcqs = st.number_input("Number of MCQs", min_value=1, max_value=20, value=5, step=1)
+
+if st.button("Generate MCQs"):
+    if mcq_topic.strip():
+        with st.spinner("Generating questions..."):
+            mcq_chain = build_mcq_chain()
+
+            questions = mcq_chain.invoke({
+                "context": mcq_topic,   
+                "num_questions": num_mcqs
+            })
+
+        st.success("✅ MCQs Generated")
+        st.write(questions)
+    else:
+        st.warning("Please enter a topic before generating MCQs.")
