@@ -86,5 +86,18 @@ def build_rag_chain():
     
     return rag_chain
 
-
+def build_mcq_chain():
     
+    llm = HuggingFaceEndpoint(repo_id="openai/gpt-oss-20b", task="text-generation")
+    model = ChatHuggingFace(llm=llm)
+    
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "You are an AI exam assistent/teacher. Generate multiple choice questions on following text."),
+        ("human", "Text:\n{context}\n\nGenerate {num_questions} MCQs with 4 options each, and mark the correct answer.")
+    ])
+    
+    parser = StrOutputParser()
+
+    mcq_chain = prompt | model | parser
+    
+    return mcq_chain
