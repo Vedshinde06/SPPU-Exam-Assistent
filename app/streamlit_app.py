@@ -4,7 +4,7 @@ import os
 
 st.set_page_config(page_title="SPPU Exam Assistant — Chat RAG", layout="wide")
 st.title("📘 SPPU Exam Assistant")
-
+st.subheader("Upload the TextBook PDF:")
 # session state init
 if "history" not in st.session_state:
     st.session_state.history = []   # list of {'role': 'user'|'assistant', 'content': ...}
@@ -17,7 +17,7 @@ if "chunks_loaded" not in st.session_state:
 temp_dir = "temp_pdfs"
 os.makedirs(temp_dir, exist_ok=True)
 
-uploaded_file = st.file_uploader("Upload one or more PDF Textbooks", type="pdf", accept_multiple_files=False)
+uploaded_file = st.file_uploader("Upload text PDF's only", type="pdf", accept_multiple_files=False)
 
 if uploaded_file is not None:
     # save file
