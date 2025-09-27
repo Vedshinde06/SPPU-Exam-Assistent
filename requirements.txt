@@ -8,3 +8,5 @@ streamlit
 faiss-cpu
 pypdf
 dotenv
+torch
+python-dotenv
