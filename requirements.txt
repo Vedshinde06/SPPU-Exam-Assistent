@@ -10,3 +10,7 @@ pypdf
 dotenv
 torch
 python-dotenv
+fastapi
+requests
+python-multipart
+uvicorn
