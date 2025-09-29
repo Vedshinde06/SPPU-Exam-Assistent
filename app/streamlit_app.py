@@ -1,142 +1,269 @@
 import streamlit as st
-from app import load_documents, split_documents, create_vectorstore, build_rag_chain, format_retrieved_docs, format_chat_history, build_mcq_chain
 import os
+from app import (
+    load_documents, split_documents, create_vectorstore, build_rag_chain,
+    format_retrieved_docs, format_chat_history, build_mcq_chain
+)
 
-st.set_page_config(page_title="SPPU Exam Assistant — Chat RAG", layout="wide")
-st.title("📘 SPPU Exam Assistant")
-st.subheader("Upload the TextBook PDF:")
-# session state init
+st.set_page_config(page_title="SPPU Exam Assistant", layout="wide", page_icon="📘")
+
+# ---------------- Custom CSS for Dark Theme ----------------
+st.markdown("""
+<style>
+    .main-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 30px;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        margin-bottom: 20px;
+    }
+    .main-header h1 {
+        color: white;
+        margin: 0;
+        font-size: 2.5em;
+    }
+    .main-header p {
+        color: #f0f0f0;
+        font-size: 1.2em;
+        margin-top: 10px;
+    }
+    .fun-fact {
+        background-color: rgba(255, 193, 7, 0.15);
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 5px solid #ffc107;
+        margin: 20px 0;
+        color: #ffd54f;
+    }
+    .stats-card {
+        background-color: rgba(102, 126, 234, 0.1);
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid rgba(102, 126, 234, 0.3);
+        text-align: center;
+    }
+    .stats-card h3 {
+        color: #667eea;
+        margin: 0;
+        font-size: 2em;
+    }
+    .stats-card p {
+        color: #b0bec5;
+        margin: 5px 0 0 0;
+    }
+    .source-box {
+        background-color: rgba(255, 255, 255, 0.05);
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 3px solid #667eea;
+        margin: 10px 0;
+    }
+    .source-box strong {
+        color: #81c784;
+    }
+    .mcq-container {
+        background-color: rgba(255, 255, 255, 0.05);
+        padding: 20px;
+        border-radius: 10px;
+        border: 1px solid rgba(102, 126, 234, 0.2);
+        margin: 15px 0;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ---------------- Main Header ----------------
+st.markdown("""
+<div class="main-header">
+    <h1>📘 SPPU Exam Assistant</h1>
+    <p>
+        Your AI-powered study companion to chat with textbooks, generate practice MCQs, and ace your exams!
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+# ---------------- Fun Fact ----------------
+st.markdown("""
+<div class="fun-fact">
+    <strong>💡 Fun Fact:</strong> If an engineer is studying, that means the exam is tomorrow! 😅
+</div>
+""", unsafe_allow_html=True)
+
+# ---------------- Session State ----------------
 if "history" not in st.session_state:
-    st.session_state.history = []   # list of {'role': 'user'|'assistant', 'content': ...}
-
+    st.session_state.history = []
 if "vectorstore" not in st.session_state:
     st.session_state.vectorstore = None
 if "chunks_loaded" not in st.session_state:
     st.session_state.chunks_loaded = 0
 
+# ---------------- Sidebar ----------------
+with st.sidebar:
+    st.markdown("### 🎯 Mode Selection")
+    mode = st.radio("", ["💬 Chat", "📝 Generate MCQs"], label_visibility="collapsed")
+    
+    st.markdown("---")
+    st.markdown("### 📁 Upload PDF")
+    uploaded_file = st.file_uploader("Upload your textbook PDF", type="pdf", accept_multiple_files=False)
+    
+    # Show stats if PDF is loaded
+    if st.session_state.vectorstore is not None:
+        st.markdown("---")
+        st.markdown("### 📊 Document Stats")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Chunks", st.session_state.chunks_loaded, delta=None)
+        with col2:
+            st.metric("Messages", len(st.session_state.history), delta=None)
+        
+        if st.button("🗑️ Clear Chat History", use_container_width=True):
+            st.session_state.history = []
+            st.rerun()
+
 temp_dir = "temp_pdfs"
 os.makedirs(temp_dir, exist_ok=True)
 
-uploaded_file = st.file_uploader("Upload text PDF's only", type="pdf", accept_multiple_files=False)
-
-if uploaded_file is not None:
-    # save file
+# ---------------- Handle PDF Upload ----------------
+if uploaded_file is not None and st.session_state.vectorstore is None:
     file_path = os.path.join(temp_dir, uploaded_file.name)
     with open(file_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
+    st.sidebar.success(f"✅ Uploaded: {uploaded_file.name}")
 
-    st.info("Loading PDF and building vector store (this may take a moment)...")
-    docs = load_documents(file_path)
+    with st.spinner("🔄 Processing PDF..."):
+        # Load documents & create vectorstore
+        docs = load_documents(file_path)
+        for idx, d in enumerate(docs):
+            if d.metadata is None:
+                d.metadata = {}
+            if "page" not in d.metadata:
+                d.metadata["page"] = idx + 1
+            if "source" not in d.metadata:
+                d.metadata["source"] = uploaded_file.name
 
-    # Ensure page metadata exists (PyPDFLoader often includes metadata 'source' and 'page'; we enforce page if missing)
-    for idx, d in enumerate(docs):
-        if d.metadata is None:
-            d.metadata = {}
-        if "page" not in d.metadata:
-            d.metadata["page"] = idx + 1
-        if "source" not in d.metadata:
-            d.metadata["source"] = uploaded_file.name
+        splits = split_documents(docs)
+        st.session_state.vectorstore = create_vectorstore(splits)
+        st.session_state.chunks_loaded = len(splits)
+        os.remove(file_path)
 
-    splits = split_documents(docs)
-    st.session_state.vectorstore = create_vectorstore(splits)
-    st.session_state.chunks_loaded = len(splits)
-    st.success(f"Vector store ready — {len(splits)} chunks indexed from {uploaded_file.name}.")
+    st.sidebar.info(f"📄 {len(splits)} chunks indexed successfully!")
 
-# show current conversation
-chat_col, side_col = st.columns([3, 1])
 
-with chat_col:
-    st.subheader("Conversation")
-    # render chat messages
+# ---------------- Main Area ----------------
+if mode == "💬 Chat":
+    st.markdown("### 💬 Chat with Your PDF")
+    
+    # Show chat messages
     for msg in st.session_state.history:
         if msg["role"] == "user":
-            st.chat_message("user").write(msg["content"])
+            with st.chat_message("user", avatar="👨‍🎓"):
+                st.write(msg["content"])
         else:
-            st.chat_message("assistant").write(msg["content"])
-
-    # chat input
-    user_input = st.chat_input("Ask a question about the uploaded PDF(s)...")
+            with st.chat_message("assistant", avatar="🤖"):
+                st.write(msg["content"])
+    
+    # Chat input
+    user_input = st.chat_input("Ask a question about the uploaded PDF...")
+    
     if user_input:
-        # append user message to history and display immediately
+        # Add user message
         st.session_state.history.append({"role": "user", "content": user_input})
-        st.chat_message("user").write(user_input)
-
-        # require vectorstore
+        with st.chat_message("user", avatar="👨‍🎓"):
+            st.write(user_input)
+        
         if st.session_state.vectorstore is None:
-            answer = "Please upload a PDF first."
-            st.session_state.history.append({"role": "assistant", "content": answer})
-            st.chat_message("assistant").write(answer)
-        else:
-            # 1) Retrieve top-k chunks (we call vectorstore.similarity_search directly)
-            top_docs = st.session_state.vectorstore.similarity_search(user_input, k=4)
-
-            # 2) Build context string + structured sources
-            context_text, sources = format_retrieved_docs(top_docs, char_limit=800)
-
-            # 3) Format chat_history string (for the prompt)
-            chat_history_str = format_chat_history(st.session_state.history)
-
-            # 4) Build & invoke LCEL rag chain
-            rag_chain = build_rag_chain()
-            chain_input = {
-                "chat_history": chat_history_str,
-                "context": context_text,
-                "question": user_input,
-            }
-
-            # invoke chain -> returns parsed string (StrOutputParser)
-            try:
-                result = rag_chain.invoke(chain_input)
-                # result should be the assistant answer string
-            except Exception as e:
-                result = f"Error while generating answer: {e}"
-
-            # 5) append assistant message to history and display
+            result = "❌ Please upload a PDF first to start chatting."
             st.session_state.history.append({"role": "assistant", "content": result})
-            st.chat_message("assistant").write(result)
-
-            # 6) show sources in expander (page numbers & snippets)
-            with st.expander("📌 Retrieved sources (click to expand)"):
-                for i, s in enumerate(sources):
-                    st.markdown(f"**Source {i+1}:** `{s['source']}` — **Page:** {s['page']}")
-                    st.write(s["snippet"])
-                    st.markdown("---")
-
-with side_col:
-    st.subheader("Info")
-    st.write(f"Chunks indexed: {st.session_state.chunks_loaded}")
-    st.write("Tips:")
-    st.write("- Ask follow-up questions — history is preserved during this session.")
-    st.write("- If the assistant says \"I don't know\", try rephrasing the question or upload more material.")
-
-st.sidebar.title("Exam Assistent")
-
-if uploaded_file:
-    st.sidebar.subheader("Uploaded File")
-    st.sidebar.write(f"📘{uploaded_file.name}")
+            with st.chat_message("assistant", avatar="🤖"):
+                st.write(result)
+        else:
+            with st.chat_message("assistant", avatar="🤖"):
+                with st.spinner("🔍 Searching through your textbook..."):
+                    # RAG retrieval
+                    top_docs = st.session_state.vectorstore.similarity_search(user_input, k=5)
+                    context_text, sources = format_retrieved_docs(top_docs, char_limit=800)
+                    chat_history_str = format_chat_history(st.session_state.history)
+                    
+                    rag_chain = build_rag_chain()
+                    result = rag_chain.invoke({
+                        "chat_history": chat_history_str,
+                        "context": context_text,
+                        "question": user_input
+                    })
+                
+                st.write(result)
+                st.session_state.history.append({"role": "assistant", "content": result})
+                
+                # Show sources in expander
+                with st.expander("📌 View Retrieved Sources"):
+                    for i, s in enumerate(sources):
+                        st.markdown(f"""
+                        <div class="source-box">
+                            <strong>Source {i+1}:</strong> {s['source']} — <strong>Page:</strong> {s['page']}<br>
+                            <p style="color: #b0bec5; margin-top: 8px;">{s["snippet"]}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+elif mode == "📝 Generate MCQs":
+    st.markdown("### 📝 Generate Practice MCQs")
     
-if "source" in st.session_state:
-    st.sidebar.subheader("Sources")
-    for src in st.session_state["sources"]:
-        st.sidebar.write(f"📄 Page {src.metadata.get('page', '?')} – {src.metadata.get('source', '')}")
-    
-    
-st.subheader("Generate Practice MCQ's")
-    
-mcq_topic = st.text_input("Enter topic for MCQs (Topic should be from the uploaded PDF):")
-num_mcqs = st.number_input("Number of MCQs", min_value=1, max_value=20, value=5, step=1)
-
-if st.button("Generate MCQs"):
-    if mcq_topic.strip():
-        with st.spinner("Generating questions..."):
-            mcq_chain = build_mcq_chain()
-
-            questions = mcq_chain.invoke({
-                "context": mcq_topic,   
-                "num_questions": num_mcqs
-            })
-
-        st.success("✅ MCQs Generated")
-        st.write(questions)
+    if st.session_state.vectorstore is None:
+        st.warning("⚠️ Please upload a PDF first to generate MCQs.")
+        st.info("👉 Use the sidebar to upload your textbook PDF")
     else:
-        st.warning("Please enter a topic before generating MCQs.")
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            topic_text = st.text_area(
+                "Enter topic or keywords (optional)",
+                placeholder="E.g., Data Structures, Algorithms, Database Management...",
+                help="Leave empty to generate questions from the entire document"
+            )
+        
+        with col2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            num_mcqs = st.number_input(
+                "Number of MCQs", 
+                min_value=1, 
+                max_value=20, 
+                value=5, 
+                step=1
+            )
+        
+        if st.button("🎲 Generate MCQs", type="primary", use_container_width=True):
+            with st.spinner("✨ Generating MCQs from your textbook..."):
+                # Use RAG-based MCQ chain
+                rag_mcq_chain = build_mcq_chain()
+                top_docs = st.session_state.vectorstore.similarity_search(topic_text or "", k=5)
+                context_text, sources = format_retrieved_docs(top_docs, char_limit=1000)
+                
+                mcqs = rag_mcq_chain.invoke({
+                    "context": context_text,
+                    "num_questions": num_mcqs
+                })
+            
+            st.success("✅ MCQs Generated Successfully!")
+            
+            # Display MCQs in a nice container
+            st.markdown("""
+            <div class="mcq-container">
+            """, unsafe_allow_html=True)
+            st.markdown(mcqs)
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+            # Show sources
+            with st.expander("📚 Sources Used for MCQ Generation"):
+                for i, s in enumerate(sources):
+                    st.markdown(f"""
+                    <div class="source-box">
+                        <strong>Source {i+1}:</strong> {s['source']} — <strong>Page:</strong> {s['page']}<br>
+                        <p style="color: #b0bec5; margin-top: 8px;">{s["snippet"]}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+# ---------------- Footer ----------------
+st.markdown("---")
+st.markdown("""
+<div style="text-align: center; color: #666; padding: 20px;">
+    <p> Vedant Shinde | Powered by OpenAI's opensource model gpt-oss-20b 🤖</p>
+</div>
+""", unsafe_allow_html=True)
