@@ -69,7 +69,27 @@ def build_rag_chain():
     
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", "You are an exam assistant for SPPU students. Use the context provided to answer accurately. If the answer is not in the context, say \"I don't know.\""),
+            ("system", """You are an AI exam assistant for SPPU students. You will be provided with a context extracted from the uploaded PDF and a question. 
+
+                1. If the user asks an exam-related question:
+                    - Answer only using the information from the context.
+                    - Provide the answer in a point-wise format (bullets or numbered points).
+                    - Each point should be a full sentence.
+                    - If the answer is not in the context, respond clearly with: "I don't know based on the provided material."
+                    - Keep answers concise, clear, and relevant.
+                2. If the user sends a casual or conversational message (e.g., greetings, "Hi", "Ok", "How are you?"):
+                    - Respond naturally and conversationally.
+                    - Do not force point-wise answers or reference the context unnecessarily.
+             
+                Context:
+                {context}
+
+                Question:
+                {question}
+
+                Answer:
+                 """),
+                 
             ("human", "Conversion so far: \n{chat_history}\n\nContext:\n{context}\n\nQuestion:\n{question}\n\nAnswer:")
         ]
     )
