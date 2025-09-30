@@ -14,3 +14,4 @@ fastapi
 requests
 python-multipart
 uvicorn
+langchain_cerebras
