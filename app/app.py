@@ -14,7 +14,7 @@ def load_documents(file_path):
     loader = PyPDFLoader(file_path)
     return loader.load()
 
-def split_documents(docs, chunk_size=1000, chunk_overlap=200):
+def split_documents(docs, chunk_size=2000, chunk_overlap=200):
     splitter = RecursiveCharacterTextSplitter(
         chunk_size = chunk_size,
         chunk_overlap = chunk_overlap
@@ -116,13 +116,13 @@ def build_mcq_chain():
     
     llm = HuggingFaceEndpoint(repo_id="openai/gpt-oss-20b", task="text-generation")
     model = ChatCerebras(
-    model="llama-4-scout-17b-16e-instruct",
+    model="llama-3.3-70b",
     api_key=os.getenv("CEREBRAS_API_KEY")
     )
     #model = ChatHuggingFace(llm=llm)
     
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are an AI exam assistent/teacher. Generate multiple choice questions on following text."),
+        ("system", "You are an AI exam assistent/teacher. Generate multiple choice questions on following text. The structure of the response should be neat and clean"),
         ("human", "Text:\n{context}\n\nGenerate {num_questions} MCQs with 4 options each, and mark the correct answer.")
     ])
     
