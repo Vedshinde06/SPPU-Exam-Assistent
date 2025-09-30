@@ -4,6 +4,8 @@ from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings, HuggingFaceEndpoint, ChatHuggingFace, HuggingFacePipeline
 from langchain.prompts import PromptTemplate, ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from langchain_cerebras import ChatCerebras
+import os
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -64,7 +66,11 @@ def build_rag_chain():
     #retriever = vectorstore.as_retriever(search_kwargs={"k":5})
     
     llm = HuggingFaceEndpoint(repo_id="openai/gpt-oss-20b", task="text-generation")
-    model = ChatHuggingFace(llm=llm)
+    #model = ChatHuggingFace(llm=llm)
+    model = ChatCerebras(
+    model="llama-4-scout-17b-16e-instruct",
+    api_key=os.getenv("CEREBRAS_API_KEY")
+    )
     parser = StrOutputParser()
     
     prompt = ChatPromptTemplate.from_messages(
@@ -109,7 +115,11 @@ def build_rag_chain():
 def build_mcq_chain():
     
     llm = HuggingFaceEndpoint(repo_id="openai/gpt-oss-20b", task="text-generation")
-    model = ChatHuggingFace(llm=llm)
+    model = ChatCerebras(
+    model="llama-4-scout-17b-16e-instruct",
+    api_key=os.getenv("CEREBRAS_API_KEY")
+    )
+    #model = ChatHuggingFace(llm=llm)
     
     prompt = ChatPromptTemplate.from_messages([
         ("system", "You are an AI exam assistent/teacher. Generate multiple choice questions on following text."),
