@@ -14,7 +14,7 @@ def load_documents(file_path):
     loader = PyPDFLoader(file_path)
     return loader.load()
 
-def split_documents(docs, chunk_size=2000, chunk_overlap=200):
+def split_documents(docs, chunk_size=1000, chunk_overlap=200):
     splitter = RecursiveCharacterTextSplitter(
         chunk_size = chunk_size,
         chunk_overlap = chunk_overlap
@@ -67,6 +67,7 @@ def build_rag_chain():
     
     llm = HuggingFaceEndpoint(repo_id="openai/gpt-oss-20b", task="text-generation")
     #model = ChatHuggingFace(llm=llm)
+   
     model = ChatCerebras(
     model="llama-4-scout-17b-16e-instruct",
     api_key=os.getenv("CEREBRAS_API_KEY")
